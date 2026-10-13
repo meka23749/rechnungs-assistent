@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 BASIS = Path(__file__).resolve().parent.parent
@@ -31,6 +32,7 @@ def lade_env(pfad: Path) -> None:
 lade_env(BASIS / ".env")
 
 from . import datenbank  # noqa: E402  (nach .env, damit DB_PFAD greift)
+from .export import erstelle_excel  # noqa: E402
 from .extraktion import Rechnung, extrahiere, ki_verfuegbar, modell, pdf_zu_text  # noqa: E402
 from .pruefung import gesamtstatus, pruefe  # noqa: E402
 
@@ -146,3 +148,13 @@ def zuruecksetzen():
     datenbank.alle_loeschen()
     return {"ok": True}
 
+
+@app.get("/api/export.xlsx")
+def excel():
+    inhalt = erstelle_excel(datenbank.alle())
+    name = f"rechnungen_{datetime.now():%Y-%m-%d}.xlsx"
+    return Response(
+        inhalt,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )

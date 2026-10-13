@@ -165,6 +165,10 @@ def test_kompletter_ablauf_ueber_die_api():
         assert neu["status"] == "ok"
         assert client.post(f"/api/rechnungen/{druck['id']}/freigabe", json={"freigegeben": True}).json()["freigegeben"]
 
+        # Excel-Export
+        excel = client.get("/api/export.xlsx")
+        assert excel.status_code == 200 and excel.content[:2] == b"PK"
+
         # Keine PDF -> Fehlermeldung statt Absturz
         falsch = client.post("/api/rechnungen", files={"dateien": ("notiz.pdf", b"kein pdf", "application/pdf")}).json()
         assert falsch["fehler"] and not falsch["rechnungen"]
