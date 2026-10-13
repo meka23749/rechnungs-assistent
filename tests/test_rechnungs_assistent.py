@@ -1,17 +1,21 @@
-"""Tests: Prüfregeln, Regel-Extraktion und KI-Extraktion (mit Attrappe)."""
+"""Tests: Prüfregeln, Regel-Extraktion, KI-Extraktion (mit Attrappe) und API."""
 
 import json
 import os
+import tempfile
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
+os.environ["DB_PFAD"] = str(Path(tempfile.mkdtemp()) / "test.db")
 os.environ.pop("ANTHROPIC_API_KEY", None)
 
 import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
 from app.extraktion import (Rechnung, extrahiere, extrahiere_mit_regeln, maskieren,  # noqa: E402
                             pdf_zu_text)
+from app.main import app  # noqa: E402
 from app.pruefung import gesamtstatus, iban_gueltig, pruefe  # noqa: E402
 
 BEISPIELE = Path(__file__).resolve().parent.parent / "beispielrechnungen"
@@ -130,3 +134,37 @@ def test_ki_fehler_faellt_auf_regeln_zurueck():
     ergebnis = extrahiere(text, "ki", client=KaputterClient())
     assert ergebnis.quelle == "regeln" and "ConnectionError" in ergebnis.hinweis
     assert ergebnis.rechnung.rechnungsnummer == "ET-48213"
+
+
+# ------------------------------------------------------------ API
+
+def test_kompletter_ablauf_ueber_die_api():
+    with TestClient(app) as client:
+        client.delete("/api/rechnungen")
+        antwort = client.post("/api/beispiele", data={"modus": "regeln"}).json()
+        status = {r["dateiname"]: r["status"] for r in antwort["rechnungen"]}
+        assert status == {
+            "01_nordwind_buerobedarf.pdf": "ok",
+            "02_elbtal_it_service.pdf": "ok",
+            "03_alster_catering.pdf": "pruefen",
+            "04_hanse_druck_medien.pdf": "fehler",
+            "05_nordwind_buerobedarf_kopie.pdf": "fehler",
+            "06_kieler_software.pdf": "fehler",
+            "07_nordlicht_reinigung.pdf": "ok",
+        }
+
+        # Fehlerhafte Rechnung kann nicht freigegeben werden
+        druck = next(r for r in antwort["rechnungen"] if r["dateiname"].startswith("04"))
+        assert client.post(f"/api/rechnungen/{druck['id']}/freigabe", json={"freigegeben": True}).status_code == 409
+
+        # Mensch korrigiert den Bruttobetrag -> Regeln laufen erneut -> ok
+        korrektur = {k: druck[k] for k in ["lieferant", "rechnungsnummer", "rechnungsdatum", "netto",
+                                           "mwst_satz", "mwst_betrag", "iban"]}
+        korrektur["brutto"] = 812.77
+        neu = client.put(f"/api/rechnungen/{druck['id']}", json=korrektur).json()
+        assert neu["status"] == "ok"
+        assert client.post(f"/api/rechnungen/{druck['id']}/freigabe", json={"freigegeben": True}).json()["freigegeben"]
+
+        # Keine PDF -> Fehlermeldung statt Absturz
+        falsch = client.post("/api/rechnungen", files={"dateien": ("notiz.pdf", b"kein pdf", "application/pdf")}).json()
+        assert falsch["fehler"] and not falsch["rechnungen"]
