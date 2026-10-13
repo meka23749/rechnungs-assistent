@@ -1,7 +1,8 @@
-"""Tests: Regel-Extraktion und KI-Extraktion (mit Attrappe)."""
+"""Tests: Prüfregeln, Regel-Extraktion und KI-Extraktion (mit Attrappe)."""
 
 import json
 import os
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,9 +10,64 @@ os.environ.pop("ANTHROPIC_API_KEY", None)
 
 import pytest  # noqa: E402
 
-from app.extraktion import extrahiere, extrahiere_mit_regeln, maskieren, pdf_zu_text  # noqa: E402
+from app.extraktion import (Rechnung, extrahiere, extrahiere_mit_regeln, maskieren,  # noqa: E402
+                            pdf_zu_text)
+from app.pruefung import gesamtstatus, iban_gueltig, pruefe  # noqa: E402
 
 BEISPIELE = Path(__file__).resolve().parent.parent / "beispielrechnungen"
+
+
+def gute_rechnung(**aenderungen) -> Rechnung:
+    daten = dict(lieferant="Test GmbH", rechnungsnummer="R-1", rechnungsdatum="2026-10-01",
+                 netto=100.0, mwst_satz=19.0, mwst_betrag=19.0, brutto=119.0,
+                 iban="DE89 3704 0044 0532 0130 00")
+    daten.update(aenderungen)
+    return Rechnung(**daten)
+
+
+# ------------------------------------------------------------ Prüfregeln
+
+def test_korrekte_rechnung_ist_ok():
+    assert gesamtstatus(pruefe(gute_rechnung(), heute=date(2026, 10, 11))) == "ok"
+
+
+def test_rechenfehler_wird_erkannt():
+    punkte = pruefe(gute_rechnung(brutto=129.0), heute=date(2026, 10, 11))
+    assert gesamtstatus(punkte) == "fehler"
+    assert any(p.regel == "Summe" and "10,00 €" in p.meldung for p in punkte)
+
+
+def test_rundungsdifferenz_wird_toleriert():
+    assert gesamtstatus(pruefe(gute_rechnung(brutto=119.01), heute=date(2026, 10, 11))) == "ok"
+
+
+def test_ungewoehnlicher_steuersatz_ist_warnung():
+    r = gute_rechnung(mwst_satz=16.0, mwst_betrag=16.0, brutto=116.0)
+    assert gesamtstatus(pruefe(r, heute=date(2026, 10, 11))) == "pruefen"
+
+
+def test_fehlende_pflichtfelder():
+    punkte = pruefe(gute_rechnung(rechnungsnummer=None, netto=None), heute=date(2026, 10, 11))
+    assert "Rechnungsnummer" in punkte[0].meldung and "Nettobetrag" in punkte[0].meldung
+
+
+def test_duplikat_ist_fehler():
+    assert gesamtstatus(pruefe(gute_rechnung(), duplikat_von="alt.pdf", heute=date(2026, 10, 11))) == "fehler"
+
+
+def test_zukunftsdatum_ist_warnung():
+    assert gesamtstatus(pruefe(gute_rechnung(rechnungsdatum="2027-01-01"), heute=date(2026, 10, 11))) == "pruefen"
+
+
+@pytest.mark.parametrize("iban,gueltig", [
+    ("DE89 3704 0044 0532 0130 00", True),
+    ("DE89370400440532013000", True),
+    ("DE89370400440532013001", False),   # letzte Ziffer falsch
+    ("DE98370400440532013000", False),   # Zahlendreher in der Prüfziffer
+    ("DE8937040044053201300", False),    # eine Stelle zu kurz
+])
+def test_iban_pruefziffer(iban, gueltig):
+    assert iban_gueltig(iban) is gueltig
 
 
 # ------------------------------------------------------------ Extraktion
