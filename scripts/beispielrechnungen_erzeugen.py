@@ -217,6 +217,13 @@ def main() -> None:
                "NL-0926-118", "30.09.2026",
                [("Unterhaltsreinigung Büro, September", 1, "780.00"), ("Fensterreinigung", 1, "240.00")],
                layout="B", iban=iban("00011223", "990011")),
+        # Typischer Betrugsversuch: bekannter Lieferant, gültige, aber neue IBAN
+        Muster("08_elbtal_it_service_neue_bank.pdf", "Elbtal IT-Service KG",
+               "Am Deich 3 · 21029 Hamburg · service@elbtal-it.example",
+               "ET-48377", "08.10.2026",
+               [("Wartungsvertrag IT, Oktober", 1, "450.00"), ("Lizenz Virenschutz, 10 Geräte", 1, "189.00")],
+               layout="B", iban=iban("00077777", "556677"),
+               zahlungstext="Bitte beachten Sie unsere NEUE Bankverbindung. Zahlung innerhalb von 7 Tagen."),
     ]
     for m in muster:
         zeichne(m)
