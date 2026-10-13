@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rechnungseingang</title>
+<style>
+  :root {
+    --papier: #F2F4F7;
+    --flaeche: #FFFFFF;
+    --tinte: #1B2A41;
+    --linie: #C9D6E3;
+    --linie-fein: #E3E9F0;
+    --grau: #5B6B7F;
+    --gruen: #2E7D4F;
+    --gelb: #A86A12;
+    --rot: #B3261E;
+    --blau: #2A4F9E;
+    --schrift-titel: "Bahnschrift", "DIN Alternate", "DIN 2014", "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+    --schrift: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--papier);
+    color: var(--tinte);
+    font: 15px/1.5 var(--schrift);
+  }
+  button, select, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--blau); outline-offset: 2px; }
+
+  /* Kopf */
+  header {
+    background: var(--tinte);
+    color: #fff;
+    padding: 18px 32px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 24px;
+  }
+  header h1 {
+    margin: 0;
+    font: 600 26px/1.1 var(--schrift-titel);
+    letter-spacing: 0.01em;
+  }
+  header p { margin: 0; color: #B9C6D6; font-size: 14px; flex: 1 1 280px; }
+  .modus {
+    font-size: 13px;
+    padding: 3px 10px;
+    border: 1px solid #50627C;
+    border-radius: 999px;
+    color: #DDE6F0;
+    white-space: nowrap;
+  }
+  .modus[data-ki="true"]::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #5FD08A; margin-right: 7px; }
+  .modus[data-ki="false"]::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #E0B04B; margin-right: 7px; }
+
+  /* Ablauf */
+  .ablauf {
+    list-style: none;
+    margin: 0;
+    padding: 10px 32px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 0;
+    background: #E6EBF1;
+    border-bottom: 1px solid var(--linie);
+    font-size: 13px;
+    color: var(--grau);
+    counter-reset: schritt;
+  }
+  .ablauf li { counter-increment: schritt; display: flex; align-items: center; }
+  .ablauf li::before {
+    content: counter(schritt);
+    display: inline-grid; place-items: center;
+    width: 19px; height: 19px; margin-right: 7px;
+    border: 1px solid var(--grau); border-radius: 50%;
+    font-size: 11px; font-weight: 600;
+  }
+  .ablauf li:not(:last-child)::after { content: ""; width: 26px; height: 1px; background: var(--grau); margin: 0 10px; opacity: .6; }
+
+  main { max-width: 1240px; margin: 0 auto; padding: 24px 32px 48px; }
+
+  /* Eingang */
+  .eingang {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: stretch;
+  }
+  .ablage {
+    border: 2px dashed var(--linie);
+    border-radius: 6px;
+    background: var(--flaeche);
+    padding: 22px 24px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    transition: border-color .15s, background .15s;
+  }
+  .ablage.aktiv { border-color: var(--blau); background: #EEF3FB; }
+  .ablage svg { flex: none; }
+  .ablage strong { display: block; font: 600 17px/1.3 var(--schrift-titel); }
+  .ablage span { color: var(--grau); font-size: 14px; }
+  .ablage label { color: var(--blau); text-decoration: underline; cursor: pointer; }
+  .ablage input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .steuerung {
+    display: flex; flex-direction: column; justify-content: center; gap: 10px;
+    min-width: 250px;
+  }
+  .steuerung label { font-size: 13px; color: var(--grau); display: grid; gap: 3px; }
+  select {
+    padding: 7px 10px; border: 1px solid var(--linie); border-radius: 4px; background: var(--flaeche);
+  }
+
+  .knopf {
+    border: 1px solid var(--tinte);
+    background: var(--tinte);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .knopf:hover { background: #2B3F5E; }
+  .knopf.leise { background: transparent; color: var(--tinte); }
+  .knopf.leise:hover { background: #E6EBF1; }
+  .knopf[disabled] { opacity: .5; cursor: progress; }
+
+  /* Übersicht */
+  .uebersicht {
+    margin: 26px 0 0;
+    display: flex; flex-wrap: wrap; align-items: flex-end;
+    gap: 12px 0;
+    border-bottom: 2px solid var(--tinte);
+    padding-bottom: 12px;
+  }
+  .kennzahl { padding: 0 22px; border-left: 1px solid var(--linie); }
+  .kennzahl:first-child { padding-left: 0; border-left: 0; }
+  .kennzahl dt { font-size: 13px; color: var(--grau); }
+  .kennzahl dd { margin: 0; font: 600 22px/1.2 var(--schrift-titel); font-variant-numeric: tabular-nums; }
+  .kennzahl.ok dd { color: var(--gruen); }
+  .kennzahl.pruefen dd { color: var(--gelb); }
+  .kennzahl.fehler dd { color: var(--rot); }
+  .aktionen { margin-left: auto; display: flex; gap: 10px; }
+
+  /* Journal */
+  .tabelle-rahmen { overflow-x: auto; background: var(--flaeche); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th {
+    text-align: left; font-weight: 600; font-size: 13px; color: var(--grau);
+    padding: 10px 12px; border-bottom: 1px solid var(--linie); white-space: nowrap;
+    background: var(--flaeche);
+  }
+  td { padding: 11px 12px; border-bottom: 1px solid var(--linie-fein); vertical-align: middle; }
+  th.zahl, td.zahl { text-align: right; white-space: nowrap; }
+  td.nowrap { white-space: nowrap; }
+  tr.zeile:hover td { background: #F6F8FB; }
+  tr.zeile.offen td { background: #EEF3FB; border-bottom-color: transparent; }
+  .lieferant-knopf {
+    background: none; border: 0; padding: 0; cursor: pointer; text-align: left; font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .lieferant-knopf::before {
+    content: ""; width: 7px; height: 7px; border-right: 2px solid var(--grau); border-bottom: 2px solid var(--grau);
+    transform: rotate(-45deg); transition: transform .15s; flex: none;
+  }
+  .lieferant-knopf[aria-expanded="true"]::before { transform: rotate(45deg); }
+  .datei { display: block; font-size: 12px; color: var(--grau); font-weight: 400; margin-left: 15px; }
+  .quelle { font-size: 12px; color: var(--grau); white-space: nowrap; }
+  .fehlt { color: var(--rot); font-style: italic; }
+
+  /* Stempel */
+  .stempel {
+    display: inline-block;
+    font: 700 13px/1 var(--schrift-titel);
+    letter-spacing: .06em;
+    padding: 5px 9px 4px;
+    border: 2px solid currentColor;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px var(--flaeche), inset 0 0 0 2px currentColor;
+    transform: rotate(-3deg);
+    opacity: .9;
+    white-space: nowrap;
+  }
+  .stempel.ok { color: var(--gruen); }
+  .stempel.pruefen { color: var(--gelb); }
+  .stempel.fehler { color: var(--rot); }
+  .stempel.frei { color: var(--blau); transform: rotate(2deg); margin-left: 6px; }
+
+  /* Details */
+  tr.details td { background: #EEF3FB; padding: 4px 12px 22px 35px; border-bottom: 1px solid var(--linie); }
+  .details-raster { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 28px; }
+  .details h3 { margin: 6px 0 8px; font: 600 15px/1.3 var(--schrift-titel); }
+  .protokoll { list-style: none; margin: 0; padding: 0; }
+  .protokoll li { display: grid; grid-template-columns: 22px 108px 1fr; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--linie); font-size: 14px; }
+  .protokoll .zeichen { font-weight: 700; }
+  .protokoll .ok .zeichen { color: var(--gruen); }
+  .protokoll .warnung .zeichen { color: var(--gelb); }
+  .protokoll .fehler .zeichen { color: var(--rot); }
+  .protokoll .regel { color: var(--grau); }
+  .herkunft { font-size: 13px; color: var(--grau); margin: 10px 0 0; }
+  .herkunft.hinweis { color: var(--gelb); }
+  form.felder { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+  form.felder label { display: grid; gap: 2px; font-size: 12px; color: var(--grau); }
+  form.felder label.breit { grid-column: 1 / -1; }
+  form.felder input { padding: 6px 8px; border: 1px solid var(--linie); border-radius: 4px; background: var(--flaeche); font-size: 14px; }
+  form.felder input.markiert { border-color: var(--rot); box-shadow: 0 0 0 1px var(--rot); }
+  .formular-aktionen { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+
+  .leer { padding: 48px 24px; text-align: center; color: var(--grau); background: var(--flaeche); }
+  .leer strong { display: block; color: var(--tinte); font: 600 18px/1.3 var(--schrift-titel); margin-bottom: 4px; }
+
+  .meldungen { position: fixed; right: 20px; bottom: 20px; display: grid; gap: 8px; z-index: 5; max-width: min(420px, calc(100vw - 40px)); }
+  .meldung { background: var(--tinte); color: #fff; padding: 10px 14px; border-radius: 4px; border-left: 4px solid var(--rot); font-size: 14px; }
+  .meldung.gut { border-left-color: #5FD08A; }
+
+  @media (max-width: 860px) {
+    header, .ablauf { padding-left: 16px; padding-right: 16px; }
+    main { padding: 16px 16px 40px; }
+    .eingang { grid-template-columns: 1fr; }
+    .details-raster { grid-template-columns: 1fr; }
+    .aktionen { margin-left: 0; width: 100%; }
+    .kennzahl { padding: 0 14px; }
+    tr.details td { padding-left: 12px; }
+    .ablauf li::after { display: none; }
+    .ablauf li { flex: 1 1 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Rechnungseingang</h1>
+  <p>PDF-Rechnungen auslesen, automatisch nachrechnen, freigeben und nach Excel exportieren</p>
+  <span class="modus" id="modus-anzeige" data-ki="false">Verbinde …</span>
+</header>
+
+<ol class="ablauf" aria-label="Ablauf">
+  <li>PDF einlesen</li>
+  <li>Daten auslesen (KI oder Regeln)</li>
+  <li>Automatisch nachrechnen</li>
+  <li>Mensch prüft und gibt frei</li>
+  <li>Export nach Excel</li>
+</ol>
+
+<main>
+  <section class="eingang" aria-label="Rechnungen hinzufügen">
+    <div class="ablage" id="ablage">
+      <svg width="42" height="42" viewBox="0 0 42 42" aria-hidden="true">
+        <path d="M10 4h15l9 9v25H10z" fill="#fff" stroke="#1B2A41" stroke-width="2"/>
+        <path d="M25 4v9h9" fill="none" stroke="#1B2A41" stroke-width="2"/>
+        <path d="M15 22h14M15 27h14M15 32h9" stroke="#C9D6E3" stroke-width="2"/>
+      </svg>
+      <div>
+        <strong id="ablage-titel">PDF-Rechnungen hierher ziehen</strong>
+        <span id="ablage-text">oder <label for="dateiwahl">Dateien auswählen</label>. Mehrere Dateien gleichzeitig möglich, max. 10 MB pro Datei.</span>
+        <input type="file" id="dateiwahl" accept="application/pdf,.pdf" multiple>
+      </div>
+    </div>
+    <div class="steuerung">
+      <label>Auslesen per
+        <select id="modus">
+          <option value="auto">Automatisch</option>
+          <option value="ki">KI (Claude)</option>
+          <option value="regeln">Regeln (offline)</option>
+        </select>
+      </label>
+      <button class="knopf leise" id="beispiele">Musterrechnungen verarbeiten</button>
+    </div>
+  </section>
+
+  <dl class="uebersicht" id="uebersicht"></dl>
+
+  <div class="tabelle-rahmen">
+    <table>
+      <thead>
+        <tr>
+          <th>Lieferant</th>
+          <th>Rechnungsnr.</th>
+          <th>Datum</th>
+          <th class="zahl">Netto</th>
+          <th class="zahl">MwSt</th>
+          <th class="zahl">Brutto</th>
+          <th>Prüfung</th>
+          <th>Ausgelesen per</th>
+        </tr>
+      </thead>
+      <tbody id="journal"></tbody>
+    </table>
+  </div>
+</main>
+
+<div class="meldungen" id="meldungen" role="status" aria-live="polite"></div>
+
+<script>
+const zustand = { rechnungen: [], offen: null, beschaeftigt: false, ki: false };
+const EUR = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
+const STATUS = { ok: "Geprüft", pruefen: "Prüfen", fehler: "Fehler" };
+const ZEICHEN = { ok: "✓", warnung: "!", fehler: "✕" };
+const FELD_ZU_REGEL = { brutto: ["Summe"], mwst_betrag: ["Steuerbetrag"], netto: ["Steuerbetrag"],
+                        mwst_satz: ["Steuersatz", "Steuerbetrag"], iban: ["IBAN"], rechnungsnummer: ["Duplikat"],
+                        rechnungsdatum: ["Datum"] };
+
+const $ = (sel) => document.querySelector(sel);
+const esc = (wert) => String(wert ?? "").replace(/[&<>"']/g, (z) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[z]));
+const euro = (x) => (x === null || x === undefined ? '<span class="fehlt">fehlt</span>' : EUR.format(x));
+const datum = (iso) => (iso ? iso.split("-").reverse().join(".") : '<span class="fehlt">fehlt</span>');
+const text = (t) => (t ? esc(t) : '<span class="fehlt">fehlt</span>');
+
+async function api(url, optionen = {}) {
+  const antwort = await fetch(url, optionen);
+  if (!antwort.ok) {
+    let meldung = antwort.statusText;
+    try { meldung = (await antwort.json()).detail || meldung; } catch (_) {}
+    throw new Error(meldung);
+  }
+  return antwort.json();
+}
+
+function melde(nachricht, gut = false) {
+  const el = document.createElement("div");
+  el.className = "meldung" + (gut ? " gut" : "");
+  el.textContent = nachricht;
+  $("#meldungen").append(el);
+  setTimeout(() => el.remove(), 6000);
+}
+
+function beschaeftigt(an, titel = "") {
+  zustand.beschaeftigt = an;
+  document.querySelectorAll("#beispiele, #modus").forEach((el) => (el.disabled = an));
+  $("#ablage-titel").textContent = an ? titel : "PDF-Rechnungen hierher ziehen";
+}
+
+/* ---------- Übersicht ---------- */
+function zeichneUebersicht() {
+  const r = zustand.rechnungen;
+  const zaehle = (s) => r.filter((x) => x.status === s).length;
+  const summe = r.reduce((s, x) => s + (x.brutto || 0), 0);
+  const frei = r.filter((x) => x.freigegeben).length;
+  $("#uebersicht").innerHTML = `
+    <div class="kennzahl"><dt>Rechnungen</dt><dd>${r.length}</dd></div>
+    <div class="kennzahl"><dt>Summe brutto</dt><dd>${EUR.format(summe)}</dd></div>
+    <div class="kennzahl ok"><dt>Geprüft</dt><dd>${zaehle("ok")}</dd></div>
+    <div class="kennzahl pruefen"><dt>Zu prüfen</dt><dd>${zaehle("pruefen")}</dd></div>
+    <div class="kennzahl fehler"><dt>Mit Fehlern</dt><dd>${zaehle("fehler")}</dd></div>
+    <div class="kennzahl"><dt>Freigegeben</dt><dd>${frei}</dd></div>
+    <div class="aktionen">
+      <a class="knopf" href="/api/export.xlsx" download ${r.length ? "" : 'aria-disabled="true" style="pointer-events:none;opacity:.5"'}>Excel exportieren</a>
+      <button class="knopf leise" id="leeren" ${r.length ? "" : "disabled"}>Liste leeren</button>
+    </div>`;
+  $("#leeren").onclick = leeren;
+}
+
+/* ---------- Journal ---------- */
+function zeichneJournal() {
+  const tbody = $("#journal");
+  if (!zustand.rechnungen.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="leer"><strong>Noch keine Rechnungen erfasst</strong>
+      Ziehen Sie PDF-Rechnungen in das Feld oben oder verarbeiten Sie die Musterrechnungen.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = zustand.rechnungen.map((r) => {
+    const offen = zustand.offen === r.id;
+    const zeile = `
+      <tr class="zeile${offen ? " offen" : ""}">
+        <td><button class="lieferant-knopf" aria-expanded="${offen}" data-id="${r.id}">${text(r.lieferant)}</button>
+            <span class="datei">${esc(r.dateiname)}</span></td>
+        <td class="nowrap">${text(r.rechnungsnummer)}</td>
+        <td class="nowrap">${datum(r.rechnungsdatum)}</td>
+        <td class="zahl">${euro(r.netto)}</td>
+        <td class="zahl">${euro(r.mwst_betrag)}</td>
+        <td class="zahl"><strong>${euro(r.brutto)}</strong></td>
+        <td><span class="stempel ${r.status}">${STATUS[r.status]}</span>${r.freigegeben ? '<span class="stempel frei">Freigegeben</span>' : ""}</td>
+        <td class="quelle">${r.quelle === "ki" ? "KI" : "Regeln"}${r.hinweis ? " (Fallback)" : ""}</td>
+      </tr>`;
+    return offen ? zeile + details(r) : zeile;
+  }).join("");
+
+  tbody.querySelectorAll(".lieferant-knopf").forEach((knopf) => {
+    knopf.onclick = () => {
+      const id = Number(knopf.dataset.id);
+      zustand.offen = zustand.offen === id ? null : id;
+      zeichneJournal();
+      if (zustand.offen) document.querySelector(`[data-id="${id}"]`).focus();
+    };
+  });
+  const formular = tbody.querySelector("form.felder");
+  if (formular) {
+    formular.onsubmit = (e) => { e.preventDefault(); speichern(Number(formular.dataset.id), formular); };
+    const frei = tbody.querySelector("#freigabe");
+    if (frei) frei.onclick = () => freigeben(Number(frei.dataset.id), frei.dataset.ziel === "true");
+  }
+}
+
+function details(r) {
+  const problemRegeln = new Set(r.pruefung.filter((p) => p.status !== "ok").map((p) => p.regel));
+  const markiert = (feld) => ((FELD_ZU_REGEL[feld] || []).some((regel) => problemRegeln.has(regel)) ? "markiert" : "");
+  const feld = (name, titel, wert, typ = "text", breit = false) => `
+    <label class="${breit ? "breit" : ""}">${titel}
+      <input name="${name}" type="${typ}" ${typ === "number" ? 'step="0.01"' : ""} value="${esc(wert ?? "")}" class="${markiert(name)}">
+    </label>`;
+  const herkunft = r.quelle === "ki"
+    ? `Ausgelesen per KI in ${(r.dauer_ms / 1000).toLocaleString("de-DE", { maximumFractionDigits: 1 })} s. IBAN lokal erkannt und vor dem Senden maskiert.`
+    : `Ausgelesen per Regeln in ${r.dauer_ms < 1 ? "unter 1" : r.dauer_ms} ms, ohne Internetverbindung.`;
+  return `
+    <tr class="details"><td colspan="8">
+      <div class="details-raster">
+        <div>
+          <h3>Prüfprotokoll</h3>
+          <ul class="protokoll">
+            ${r.pruefung.map((p) => `<li class="${p.status}"><span class="zeichen" aria-label="${p.status}">${ZEICHEN[p.status]}</span>
+              <span class="regel">${esc(p.regel)}</span><span>${esc(p.meldung)}</span></li>`).join("")}
+          </ul>
+          <p class="herkunft">${herkunft}</p>
+          ${r.hinweis ? `<p class="herkunft hinweis">${esc(r.hinweis)}</p>` : ""}
+        </div>
+        <div>
+          <h3>Erkannte Daten</h3>
+          <form class="felder" data-id="${r.id}">
+            ${feld("lieferant", "Lieferant", r.lieferant, "text", true)}
+            ${feld("rechnungsnummer", "Rechnungsnummer", r.rechnungsnummer)}
+            ${feld("rechnungsdatum", "Rechnungsdatum", r.rechnungsdatum, "date")}
+            ${feld("netto", "Netto (€)", r.netto, "number")}
+            ${feld("mwst_satz", "MwSt-Satz (%)", r.mwst_satz, "number")}
+            ${feld("mwst_betrag", "MwSt (€)", r.mwst_betrag, "number")}
+            ${feld("brutto", "Brutto (€)", r.brutto, "number")}
+            ${feld("iban", "IBAN", r.iban, "text", true)}
+            <div class="formular-aktionen">
+              <button class="knopf" type="submit">Speichern und neu prüfen</button>
+              <button class="knopf leise" type="button" id="freigabe" data-id="${r.id}" data-ziel="${!r.freigegeben}">
+                ${r.freigegeben ? "Freigabe zurücknehmen" : "Zur Zahlung freigeben"}</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </td></tr>`;
+}
+
+function zeichne() { zeichneUebersicht(); zeichneJournal(); }
+
+/* ---------- Aktionen ---------- */
+async function hochladen(dateien) {
+  const pdfs = [...dateien].filter((d) => d.name.toLowerCase().endsWith(".pdf"));
+  if (!pdfs.length) { melde("Bitte PDF-Dateien auswählen."); return; }
+  const daten = new FormData();
+  pdfs.forEach((d) => daten.append("dateien", d));
+  daten.append("modus", $("#modus").value);
+  await verarbeite(() => api("/api/rechnungen", { method: "POST", body: daten }), pdfs.length);
+}
+
+async function beispiele() {
+  const daten = new FormData();
+  daten.append("modus", $("#modus").value);
+  await verarbeite(() => api("/api/beispiele", { method: "POST", body: daten }), "die");
+}
+
+async function verarbeite(anfrage, anzahl) {
+  beschaeftigt(true, `Lese ${anzahl} Rechnungen aus …`);
+  try {
+    const ergebnis = await anfrage();
+    zustand.rechnungen.push(...ergebnis.rechnungen);
+    ergebnis.fehler.forEach((f) => melde(f));
+    if (ergebnis.rechnungen.length) melde(`${ergebnis.rechnungen.length} Rechnungen ausgelesen und geprüft.`, true);
+  } catch (e) {
+    melde(e.message);
+  } finally {
+    beschaeftigt(false);
+    zeichne();
+  }
+}
+
+async function speichern(id, formular) {
+  const werte = Object.fromEntries(new FormData(formular));
+  for (const k of ["netto", "mwst_satz", "mwst_betrag", "brutto"]) werte[k] = werte[k] === "" ? null : Number(werte[k]);
+  for (const k of ["lieferant", "rechnungsnummer", "rechnungsdatum", "iban"]) if (werte[k] === "") werte[k] = null;
+  try {
+    const neu = await api(`/api/rechnungen/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(werte),
+    });
+    ersetze(neu);
+    melde(`Gespeichert und neu geprüft: ${STATUS[neu.status]}.`, neu.status !== "fehler");
+  } catch (e) { melde(e.message); }
+}
+
+async function freigeben(id, ziel) {
+  try {
+    const neu = await api(`/api/rechnungen/${id}/freigabe`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ freigegeben: ziel }),
+    });
+    ersetze(neu);
+    melde(ziel ? "Zur Zahlung freigegeben." : "Freigabe zurückgenommen.", true);
+  } catch (e) { melde(e.message); }
+}
+
+async function leeren() {
+  if (!confirm("Alle erfassten Rechnungen aus der Liste löschen?")) return;
+  await api("/api/rechnungen", { method: "DELETE" });
+  zustand.rechnungen = [];
+  zustand.offen = null;
+  zeichne();
+}
+
+function ersetze(neu) {
+  zustand.rechnungen = zustand.rechnungen.map((r) => (r.id === neu.id ? neu : r));
+  zeichne();
+}
+
+/* ---------- Ablage (Drag & Drop) ---------- */
+const ablage = $("#ablage");
+["dragenter", "dragover"].forEach((ev) => ablage.addEventListener(ev, (e) => { e.preventDefault(); ablage.classList.add("aktiv"); }));
+["dragleave", "drop"].forEach((ev) => ablage.addEventListener(ev, (e) => { e.preventDefault(); ablage.classList.remove("aktiv"); }));
+ablage.addEventListener("drop", (e) => { if (!zustand.beschaeftigt) hochladen(e.dataTransfer.files); });
+$("#dateiwahl").addEventListener("change", (e) => { hochladen(e.target.files); e.target.value = ""; });
+$("#beispiele").onclick = beispiele;
+
+/* ---------- Start ---------- */
+(async function start() {
+  try {
+    const status = await api("/api/status");
+    zustand.ki = status.ki_verfuegbar;
+    const anzeige = $("#modus-anzeige");
+    anzeige.dataset.ki = status.ki_verfuegbar;
+    anzeige.textContent = status.ki_verfuegbar ? `KI-Extraktion mit ${status.modell}` : "Offline: Auslesen per Regeln";
+    const kiOption = $('#modus option[value="ki"]');
+    if (!status.ki_verfuegbar) { kiOption.disabled = true; kiOption.textContent = "KI (kein API-Schlüssel)"; }
+    zustand.rechnungen = await api("/api/rechnungen");
+  } catch (e) {
+    melde("Server nicht erreichbar: " + e.message);
+  }
+  zeichne();
+})();
+</script>
+</body>
+</html>
