@@ -44,6 +44,7 @@ STAMMDATEN = BASIS / "stammdaten" / "lieferanten.csv"
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     datenbank.initialisieren()
+    datenbank.stammdaten_laden(STAMMDATEN)
     yield
 
 
