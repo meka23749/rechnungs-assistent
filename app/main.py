@@ -38,6 +38,7 @@ from .pruefung import gesamtstatus, pruefe  # noqa: E402
 
 MAX_GROESSE = 10 * 1024 * 1024  # 10 MB pro Datei
 BEISPIELE = BASIS / "beispielrechnungen"
+STAMMDATEN = BASIS / "stammdaten" / "lieferanten.csv"
 
 
 @asynccontextmanager

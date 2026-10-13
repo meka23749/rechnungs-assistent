@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 import sqlite3
@@ -86,6 +87,20 @@ def finde_lieferant(name: str | None) -> dict | None:
             (name.strip(),),
         ).fetchone()
     return dict(row) if row else None
+
+def stammdaten_laden(pfad: Path) -> int:
+    """Liest name;iban aus einer CSV-Datei. Vorhandene Lieferanten bleiben unverändert."""
+    if not Path(pfad).exists():
+        return 0
+    neu = 0
+    with open(pfad, encoding="utf-8-sig", newline="") as datei, verbindung() as con:
+        for zeile in csv.DictReader(datei, delimiter=";"):
+            cur = con.execute(
+                "INSERT OR IGNORE INTO lieferanten (name, iban, angelegt_am) VALUES (?, ?, ?)",
+                (zeile["name"].strip(), zeile["iban"].replace(" ", "").upper() if zeile["iban"] else None, datetime.now().isoformat(timespec="seconds")),
+            )
+            neu += cur.rowcount
+    return neu
 
 def _zeile(row: sqlite3.Row) -> dict:
     daten = dict(row)
