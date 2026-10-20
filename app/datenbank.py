@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 import sqlite3
@@ -33,7 +34,17 @@ CREATE TABLE IF NOT EXISTS rechnungen (
     status          TEXT,
     pruefung        TEXT,
     freigegeben     INTEGER DEFAULT 0,
-    erfasst_am      TEXT
+    erfasst_am      TEXT,
+    lieferant_id    INTEGER REFERENCES lieferanten(lieferant_id)
+)
+"""
+
+SCHEMA_LIEFERANTEN = """
+CREATE TABLE IF NOT EXISTS lieferanten (
+    lieferant_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    iban          TEXT,
+    angelegt_am   TEXT NOT NULL
 )
 """
 
@@ -51,8 +62,45 @@ def verbindung():
 
 def initialisieren() -> None:
     with verbindung() as con:
+        con.execute(SCHEMA_LIEFERANTEN)   
         con.execute(SCHEMA)
+        spalten = [zeile["name"] for zeile in con.execute("PRAGMA table_info(rechnungen)")]
+        if "lieferant_id" not in spalten:
+            con.execute("ALTER TABLE rechnungen ADD COLUMN lieferant_id INTEGER REFERENCES lieferanten(lieferant_id)")
 
+def lieferant_anlegen(name: str, iban: str | None) -> dict:
+    """Legt einen Lieferanten an. Gleicher Name (ohne Groß-/Kleinschreibung) -> sqlite3.IntegrityError."""
+    iban_sauber = iban.replace(" ", "").upper() if iban else None
+    with verbindung() as con:
+        con.execute(
+            "INSERT INTO lieferanten (name, iban, angelegt_am) VALUES (?, ?, ?)",
+            (name.strip(), iban_sauber, datetime.now().isoformat(timespec="seconds")),
+        )
+    return finde_lieferant(name)
+
+def finde_lieferant(name: str | None) -> dict | None:
+    if not name:
+        return None
+    with verbindung() as con:
+        row = con.execute(
+            "SELECT lieferant_id, name, iban FROM lieferanten WHERE name = ? COLLATE NOCASE",
+            (name.strip(),),
+        ).fetchone()
+    return dict(row) if row else None
+
+def stammdaten_laden(pfad: Path) -> int:
+    """Liest name;iban aus einer CSV-Datei. Vorhandene Lieferanten bleiben unverändert."""
+    if not Path(pfad).exists():
+        return 0
+    neu = 0
+    with open(pfad, encoding="utf-8-sig", newline="") as datei, verbindung() as con:
+        for zeile in csv.DictReader(datei, delimiter=";"):
+            cur = con.execute(
+                "INSERT OR IGNORE INTO lieferanten (name, iban, angelegt_am) VALUES (?, ?, ?)",
+                (zeile["name"].strip(), zeile["iban"].replace(" ", "").upper() if zeile["iban"] else None, datetime.now().isoformat(timespec="seconds")),
+            )
+            neu += cur.rowcount
+    return neu
 
 def _zeile(row: sqlite3.Row) -> dict:
     daten = dict(row)

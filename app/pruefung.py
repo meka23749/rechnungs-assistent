@@ -111,6 +111,23 @@ def pruefe(r: Rechnung, duplikat_von: str | None = None, heute: date | None = No
     return punkte
 
 
+def pruefe_stammdaten(r: Rechnung, lieferant: dict | None) -> Pruefpunkt:
+    """Vergleicht die IBAN der Rechnung mit der in den Stammdaten hinterlegten Bankverbindung."""
+    if lieferant is None:
+        return Pruefpunkt("Stammdaten", "warnung",
+                          "Neuer Lieferant, nicht in den Stammdaten. Bankverbindung vor der ersten Zahlung telefonisch bestätigen")
+    rechnung_iban = r.iban.replace(" ", "").upper() if r.iban else None
+    if not rechnung_iban:
+        return Pruefpunkt("Stammdaten", "ok", "Keine IBAN auf der Rechnung")
+    if not lieferant.get("iban"):
+        return Pruefpunkt("Stammdaten", "warnung", "Keine IBAN in den Stammdaten")
+    if rechnung_iban == lieferant["iban"]:
+        return Pruefpunkt("Stammdaten", "ok", "IBAN entspricht den Stammdaten")
+    return Pruefpunkt("Stammdaten", "fehler",
+                      f"IBAN weicht von den Stammdaten ab (hinterlegt: ...{lieferant['iban'][-4:]}). "
+                      "Betrugsverdacht: Bankdaten nur nach Rückruf unter der bekannten Telefonnummer ändern")
+
+
 def gesamtstatus(punkte: list[Pruefpunkt]) -> str:
     """'fehler' schlägt 'pruefen' schlägt 'ok'."""
     stati = {p.status for p in punkte}
