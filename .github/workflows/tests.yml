@@ -1,0 +1,25 @@
+name: tests
+ 
+on:
+  push:
+    branches: [main]
+  pull_request:
+ 
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+ 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+ 
+      # sentence-transformers (and PyTorch) is skipped on purpose to keep CI fast;
+      # the tests that need it are marked with pytest.importorskip.
+      - name: Install dependencies
+        run: pip install pytest pypdf reportlab scikit-learn chromadb requests
+ 
+      - name: Run tests
+        run: pytest -v
